@@ -1,0 +1,20 @@
+{
+ "updated_utc": null,
+ "note": "DEMO alert targets at fixed sky positions for testing the optional layer.",
+ "alerts": [
+  {
+   "id": "DEMO-1",
+   "source": "demo",
+   "type": "LMC position",
+   "ra_deg": 80.894,
+   "dec_deg": -69.756
+  },
+  {
+   "id": "DEMO-2",
+   "source": "demo",
+   "type": "Galactic centre position",
+   "ra_deg": 266.417,
+   "dec_deg": -29.008
+  }
+ ]
+}

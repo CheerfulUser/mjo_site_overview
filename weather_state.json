@@ -1,0 +1,12 @@
+{
+ "updated_utc": "2026-11-15T20:15:02Z",
+ "fetched_utc": "2026-11-16T01:21:56Z",
+ "station": "MJO weather node1",
+ "note": "Wind speed: mean over the last 60 s; gust: maximum over the last 60 s; direction: vector mean, bearing the wind blows FROM.",
+ "wind_speed_kmh": 21.4,
+ "wind_gust_kmh": 25.9,
+ "wind_dir_deg": 334.0,
+ "temperature_c": 11.5,
+ "humidity_pct": 88.2,
+ "rain_rate_mm_h": 0.0
+}

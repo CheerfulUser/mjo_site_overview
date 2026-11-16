@@ -1,0 +1,36 @@
+{
+ "note": "Viewer settings. Closure rules are the operating limits from the telescope manuals (see site_map/CONTEXT.md and code/mt_john/weather/stations/CONTEXT.md); OC uses the B&C limits. warn_fraction and moon_warn_deg are placeholders to be set by MJO. history_dir points at the MOCK history (feeds/make_mock_history.py) while this is a development zone.",
+ "timezone": "Pacific/Auckland",
+ "poll_seconds": 5,
+ "weather_stale_after_s": 600,
+ "telescope_stale_after_s": 120,
+ "warn_fraction": 0.8,
+ "moon_warn_deg": 30,
+ "alerts_default_on": false,
+ "history_dir": "history_mock",
+ "closure_rules": {
+  "one_metre": {
+   "source": "HERCULES manual 2026 p.11",
+   "wind_speed_kmh": 50,
+   "rain": true
+  },
+  "bc": {
+   "source": "B&C operating manual: 50 kph; if gusting, average <= 40",
+   "wind_speed_kmh": 40,
+   "wind_gust_kmh": 50,
+   "rain": true
+  },
+  "oc": {
+   "source": "B&C limits assumed (R. Ridden)",
+   "wind_speed_kmh": 40,
+   "wind_gust_kmh": 50,
+   "rain": true
+  },
+  "moa": {
+   "source": "MOA observing manual Jul 2026: 10 m/s, 95% RH, rain",
+   "wind_speed_kmh": 36,
+   "humidity_pct": 95,
+   "rain": true
+  }
+ }
+}

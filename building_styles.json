@@ -1,0 +1,40 @@
+{
+ "note": "Building colours for the viewer, sampled (median sRGB) from R. Ridden's site photos in site_map/site_images on sunlit faces. Walls: 'wall' below and 'wall_top' for the top 'wall_top_m' metres (fascia or gable band). Domes: 'dome' cap, 'drum' cylinder, 'drum_base' for the bottom 'drum_base_m' metres. MOA-II photo is overcast: its colours are scaled x1.17 so its dome matches the sunlit B&C dome (all dome tops saturate in the aerial photo, so they are equally bright there). Domes are white, MOA-II's silver (R. Ridden); the photos' blue tint on domes is sky reflection. Buildings without photos keep 'default'.",
+ "default": {
+  "wall": "#d4d0c8",
+  "dome": "#f2f2ef",
+  "drum": "#f2f2ef"
+ },
+ "buildings": {
+  "One Metre Building": {
+   "wall": "#d1c9bd",
+   "wall_top": "#f6e4ce",
+   "wall_top_m": 1.0,
+   "source": "1m_biulding.jpg: grey concrete block panels, cream fascia/gable band"
+  },
+  "Boller & Chivens Telescope": {
+   "wall": "#e5d2bb",
+   "wall_top": "#655f5e",
+   "wall_top_m": 0.4,
+   "dome": "#f2f2ef",
+   "drum": "#f2f2ef",
+   "source": "B&C.jpg: tan block walls, dark fascia, white dome, white base ring; dome and base ring white (R. Ridden, 2026-11-16)"
+  },
+  "Optical Craftsmen Telescope": {
+   "wall": "#e5d2bb",
+   "wall_top": "#655f5e",
+   "wall_top_m": 0.4,
+   "dome": "#f2f2ef",
+   "drum": "#f2f2ef",
+   "source": "same colour scheme as B&C (R. Ridden, 2026-11-16); dome and base ring white (R. Ridden, 2026-11-16)"
+  },
+  "MOA Telescope": {
+   "wall": "#f6e4ce",
+   "dome": "#c5c5c5",
+   "drum": "#b0b8c1",
+   "drum_base": "#45443f",
+   "drum_base_m": 0.6,
+   "source": "moa_day.MP.jpg (x1.17): aluminium dome, silver corrugated drum, dark block plinth (0.13 of the drum height); observing room cream as the One Metre (in shade in the photo, same hue); dome silver (R. Ridden): neutral grey at the measured dome brightness (197/255), sky tint removed"
+  }
+ }
+}

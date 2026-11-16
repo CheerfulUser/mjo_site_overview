@@ -1,0 +1,907 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mt John Live Status</title>
+<style>
+  :root { --bg: #eef2f6; --panel: rgba(255, 255, 255, 0.92); --fg: #1f2328; --muted: #59636e; --accent: #0969da;
+          --line: rgba(31, 35, 40, 0.15); --hover: rgba(9, 105, 218, 0.1); --wind: #0b7285; --bldg-label: #ffe2c2;
+          --bad: #cf222e; --warn: #bc4c00; --panel-solid: #ffffff; color-scheme: light; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #0d1117; --panel: rgba(22, 27, 34, 0.92); --fg: #e6edf3; --muted: #8b949e;
+          --accent: #58a6ff; --line: rgba(230, 237, 243, 0.15); --hover: rgba(88, 166, 255, 0.15); --wind: #3bc9db;
+          --bldg-label: #ffd7a8; --bad: #ff6b6b; --warn: #ff922b; --panel-solid: #161b22; color-scheme: dark; }
+  }
+  :root[data-theme="dark"] { --bg: #0d1117; --panel: rgba(22, 27, 34, 0.92); --fg: #e6edf3; --muted: #8b949e;
+          --accent: #58a6ff; --line: rgba(230, 237, 243, 0.15); --hover: rgba(88, 166, 255, 0.15); --wind: #3bc9db;
+          --bldg-label: #ffd7a8; --bad: #ff6b6b; --warn: #ff922b; --panel-solid: #161b22; color-scheme: dark; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--fg); font-family: system-ui, sans-serif; }
+  #view { position: absolute; inset: 0; }
+  .card { position: absolute; z-index: 50; background: var(--panel); color: var(--fg); padding: 10px 12px; border-radius: 6px;
+          font-size: 13px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25); border: 1px solid var(--line); }
+  #panel { top: 12px; left: 12px; width: 340px; max-height: calc(100vh - 420px); overflow-y: auto; }
+  #panel h1 { font-size: 15px; margin: 0 0 6px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .btn { background: none; border: 1px solid var(--line); color: var(--fg); border-radius: 4px; font-size: 12px;
+         padding: 2px 8px; cursor: pointer; }
+  .btn.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  table { border-collapse: collapse; width: 100%; margin-top: 6px; }
+  td, th { padding: 2px 4px; text-align: left; vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; }
+  .opts { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; color: var(--muted); align-items: center; }
+  .status { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .bad { color: var(--bad); }
+  .warn { color: var(--warn); }
+  .label { position: absolute; z-index: 1; transform: translate(-50%, -100%); font-size: 12px; color: #fff; pointer-events: none;
+           text-shadow: 0 0 3px #000, 0 0 3px #000; white-space: nowrap; }
+  .label.bldg { font-size: 11px; color: var(--bldg-label); }
+  .label.scope { pointer-events: auto; cursor: pointer; font-weight: 600; }
+  .label.wind, .label.sky { font-weight: 600; }
+  .label.alert { color: #e5b8ff; font-weight: 600; }
+  .label.scope.fault, .cond-fault { color: #ff5c5c; }
+  .label.scope.weather, .cond-weather { color: #ff922b; }
+  .label.scope.fault { animation: fault-flash 1s steps(1, end) infinite; }
+  @keyframes fault-flash { 50% { color: #ffffff; } }
+  @media (prefers-reduced-motion: reduce) { .label.scope.fault { animation: none; } }
+  #scopes tbody tr { cursor: pointer; }
+  #scopes tbody tr:hover { background: var(--hover); }
+  #detail { top: 12px; right: 12px; width: 370px; display: none; flex-direction: column; z-index: 100; height: calc(100vh - 110px); }
+  .qwrap { overflow-y: auto; min-height: 60px; flex: 1 1 0; margin-top: 6px; }
+  .qwrap table { margin-top: 0; }
+  .qwrap thead th { position: sticky; top: 0; background: var(--panel-solid); z-index: 1; }
+  #detail h4 { margin: 8px 0 0; font-size: 13px; }
+  #detail h2 { font-size: 15px; margin: 0 0 6px; display: flex; justify-content: space-between; }
+  #detail .x { background: none; border: 0; color: var(--muted); font-size: 16px; cursor: pointer; }
+  .kv td:first-child { color: var(--muted); width: 120px; }
+  #leftstack { position: absolute; left: 12px; bottom: 12px; z-index: 50; width: 340px; display: flex; flex-direction: column; gap: 8px; }
+  #leftstack .card { position: static; }
+  #wind .top { display: flex; gap: 12px; align-items: center; }
+  #wind svg { width: 84px; height: 84px; flex: none; }
+  #wind .big { font-size: 20px; font-weight: 700; }
+  #sky .kv td:first-child { width: 48px; }
+  #wind h3 { font-size: 12px; color: var(--muted); font-weight: 600; margin: 8px 0 0; text-transform: uppercase; letter-spacing: 0.04em; }
+  #replaybar { left: 50%; transform: translateX(-50%); bottom: 12px; display: none; align-items: center; gap: 8px; width: min(560px, calc(100vw - 420px)); min-width: 320px; }
+  #replaybar input[type=range] { flex: 1; }
+  #compass { right: 14px; bottom: 14px; border-radius: 50%; width: 56px; height: 56px; padding: 0;
+             display: grid; place-items: center; font-weight: 700; }
+  #compass span { display: block; transform-origin: center; }
+</style>
+</head>
+<body>
+<div id="view"></div>
+<div id="panel" class="card">
+  <h1><span>Ōtehīwai Mt John Observatory</span><button id="theme" class="btn" title="Colour theme">Auto</button></h1>
+  <div>Current weather and telescope conditions. Click on a telescope to see its condition and observing queue.</div>
+  <table id="scopes"><thead><tr><th>Telescope</th><th>Alt</th><th>Az</th><th>Status</th></tr></thead><tbody></tbody></table>
+  <div class="opts">
+    <label><input id="blabels" type="checkbox"> Building labels</label>
+    <label><input id="showalerts" type="checkbox"> Alert targets</label>
+    <span><button id="m-live" class="btn on">Live</button> <button id="m-replay" class="btn">Replay</button></span>
+  </div>
+  <div id="alerts" style="display:none"><table><thead><tr><th>Alert</th><th>Alt</th><th>Reachable by</th></tr></thead><tbody id="alertrows"></tbody></table>
+    <div id="alertstatus" class="status"></div></div>
+  <div id="status" class="status"></div>
+  <div class="status">Terrain and aerial photo: <a href="https://data.linz.govt.nz/">LINZ</a> (CC BY 4.0); building footprints: © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors (ODbL).</div>
+</div>
+<div id="detail" class="card"><h2><span id="dname"></span><button id="dclose" class="x" title="Close">×</button></h2>
+  <table class="kv"><tbody id="dstate"></tbody></table>
+  <h4>Observing queue</h4>
+  <div class="qwrap"><table><thead><tr><th>Start (UTC)</th><th>Target</th><th>Filter</th><th>Exp (s)</th><th>Program</th></tr></thead>
+  <tbody id="dqueue"></tbody></table></div>
+  <h4>Completed observations</h4>
+  <div class="qwrap"><table><thead><tr><th>Start–end (UTC)</th><th>Target</th><th>Filter</th><th>Result</th></tr></thead>
+  <tbody id="ddone"></tbody></table></div>
+</div>
+<div id="leftstack">
+<div id="sky" class="card">
+  <table class="kv"><tbody>
+    <tr><td>Sun</td><td id="sunpos">–</td></tr>
+    <tr><td>Moon</td><td id="moonpos">–</td></tr>
+    <tr><td>Phase</td><td id="moonphase">–</td></tr>
+    <tr><td>Sky</td><td id="skystage">–</td></tr>
+    <tr><td>Time</td><td id="skytime">–</td></tr>
+  </tbody></table>
+</div>
+<div id="wind" class="card">
+  <div class="top">
+    <svg viewBox="-50 -50 100 100" aria-label="Wind direction">
+      <circle r="44" fill="none" stroke="currentColor" stroke-opacity="0.35"/>
+      <g fill="currentColor" font-size="11" text-anchor="middle" dominant-baseline="central" opacity="0.8">
+        <text y="-36">N</text><text x="36">E</text><text y="36">S</text><text x="-36">W</text>
+      </g>
+      <g id="windarrow" style="color: var(--wind)">
+        <line y1="-30" y2="22" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+        <path d="M0 32 L-9 16 L9 16 Z" fill="currentColor"/>
+      </g>
+    </svg>
+    <div>
+      <div class="big" id="wspeed">– km/h</div>
+      <div id="wgust">Gusts – km/h</div>
+      <div id="wdir">From –</div>
+      <div id="wextra" class="status"></div>
+    </div>
+  </div>
+  <h3>Closure limits</h3>
+  <table><tbody id="limits"></tbody></table>
+  <div id="wstatus" class="status"></div>
+</div>
+</div>
+
+<div id="replaybar" class="card">
+  <input id="rdate" type="date" title="Night starting on this local date">
+  <button id="rplay" class="btn">Play</button>
+  <select id="rspeed" class="btn" title="Replay speed"><option value="60">60×</option><option value="300" selected>300×</option><option value="1200">1200×</option></select>
+  <input id="rslider" type="range" min="0" max="1000" value="0">
+  <span id="rtime" style="white-space:nowrap"></span>
+</div>
+<div id="compass" class="card"><span id="needle">N</span></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/astronomy-engine@2.1.19/astronomy.browser.min.js"></script>
+<script>
+// World axes: x = east (m), y = up (m above summit ground), z = -north (m). Azimuth is east of north.
+// Data files (written by site_map/feeds/*.py): telescope_state.json, weather_state.json, alerts_state.json;
+// history/<UTC date>_<kind>.jsonl for replay, listed in history/index.json. Settings in config.json. Test links: ?time=ISO, ?theme=, ?select=<id>,
+// ?look=moon, ?alerts=1, ?history=<dir>, ?replay=<YYYY-MM-DD>.
+const COLORS = ['#ff6b6b', '#4dabf7', '#51cf66', '#ff922b', '#cc5de8', '#22b8cf', '#ffffff'];
+const BEAM_LEN = 120, ARROW_ORIGIN_Y = 12, WIND_BASE_LEN = 15, WIND_M_PER_KMH = 1.2;
+const SKY_R = 1500, SUN_R = 45, MOON_R = 45, MOON_ARROW_LEN = 200, ALERT_ARROW_LEN = 170;
+const CARDINALS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+const params = new URLSearchParams(location.search);
+const $ = id => document.getElementById(id);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+$('view').appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 1, 1, 8000);
+// Default view: from the south looking due north over the summit (x = east, z = -north)
+const VIEW_TARGET = new THREE.Vector3(-40, -10, 50);
+camera.position.set(VIEW_TARGET.x, 220, VIEW_TARGET.z + 420);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.target.copy(VIEW_TARGET);
+controls.maxPolarAngle = Math.PI * 0.495;
+const hemi = new THREE.HemisphereLight(0xffffff, 0x445533, 0.75);
+const sun = new THREE.DirectionalLight(0xffffff, 0.75);
+sun.position.set(-300, 400, -200);
+scene.add(hemi, sun);
+
+let cfg, model, terrain, observer;
+let lastTel = null, lastWx = null, lastAlerts = null, selected = null;
+let moonAltAz = null;
+let mode = 'live', replay = null;
+const raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2(), pickables = [];
+const scopeObjs = {}, labels = [];
+const tmp = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
+
+// ---------- helpers ----------
+const card = d => CARDINALS[Math.round(((d % 360) + 360) % 360 / 22.5) % 16];
+function esc(v) { return String(v ?? '–').replace(/[&<>]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch])); }
+function altazVec(alt, az) {
+  const a = THREE.MathUtils.degToRad(alt), z = THREE.MathUtils.degToRad(az);
+  return new THREE.Vector3(Math.cos(a) * Math.sin(z), Math.sin(a), -Math.cos(a) * Math.cos(z));
+}
+function angSep(a1, z1, a2, z2) {
+  const r = THREE.MathUtils.degToRad;
+  const c = Math.sin(r(a1)) * Math.sin(r(a2)) + Math.cos(r(a1)) * Math.cos(r(a2)) * Math.cos(r(z1 - z2));
+  return THREE.MathUtils.radToDeg(Math.acos(Math.min(1, Math.max(-1, c))));
+}
+function horizonAt(s, az) { return s.horizon_deg[Math.round(((az % 360) + 360) % 360) % 360]; }
+function fmtLocal(d) {
+  return d ? d.toLocaleTimeString('en-NZ', { timeZone: cfg.timezone, hour: '2-digit', minute: '2-digit', hour12: false }) : '–';
+}
+function tzName(d) {
+  return new Intl.DateTimeFormat('en-NZ', { timeZone: cfg.timezone, timeZoneName: 'short' }).formatToParts(d)
+    .find(p => p.type === 'timeZoneName').value;
+}
+function ago(iso, ref) {
+  const s = (ref - new Date(iso)) / 1000;
+  return s < 120 ? `${s.toFixed(0)} s` : s < 7200 ? `${(s / 60).toFixed(0)} min` : `${(s / 3600).toFixed(1)} h`;
+}
+function now() {
+  if (mode === 'replay' && replay) return new Date(replay.t);
+  return params.get('time') ? new Date(params.get('time')) : new Date();
+}
+function label(text, cls) {
+  const el = document.createElement('div');
+  el.className = 'label ' + (cls || '');
+  el.textContent = text;
+  document.body.appendChild(el);
+  return el;
+}
+function place(el, x, y, z) {
+  tmp.set(x, y, z).project(camera);
+  const vis = tmp.z < 1;
+  el.style.display = vis ? 'block' : 'none';
+  if (vis) {
+    el.style.left = ((tmp.x + 1) / 2 * window.innerWidth) + 'px';
+    el.style.top = ((1 - tmp.y) / 2 * window.innerHeight) + 'px';
+  }
+}
+function arrow(len, radius, color, opacity) {
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity });
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, 1, 10), mat);
+  const head = new THREE.Mesh(new THREE.ConeGeometry(radius * 4.5, 12, 16), mat);
+  const g = new THREE.Group();
+  g.add(shaft, head);
+  g.userData.setLength = L => { shaft.scale.y = L; shaft.position.y = L / 2; head.position.y = L + 6; g.userData.len = L; };
+  g.userData.setLength(len);
+  g.position.set(0, ARROW_ORIGIN_Y, 0);
+  return g;
+}
+function tipOf(g, extra) {
+  return tmp.copy(UP).applyQuaternion(g.quaternion).multiplyScalar(g.userData.len + extra).add(g.position).clone();
+}
+
+// ---------- theme ----------
+const THEMES = ['auto', 'light', 'dark'];
+let theme = 'auto';
+try { theme = localStorage.getItem('mjo3d-theme') || 'auto'; } catch (e) { /* storage unavailable */ }
+const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+let windArrow = null, windLabel = null;
+function applyTheme() {
+  if (theme === 'auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', theme);
+  $('theme').textContent = theme[0].toUpperCase() + theme.slice(1);
+  const dark = theme === 'dark' || (theme === 'auto' && darkQuery.matches);
+  hemi.intensity = sun.intensity = dark ? 0.55 : 0.75;
+  if (windArrow) windArrow.children.forEach(m => m.material.color.set(getComputedStyle(document.documentElement).getPropertyValue('--wind').trim()));
+}
+$('theme').onclick = () => {
+  theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
+  try { localStorage.setItem('mjo3d-theme', theme); } catch (e) { /* storage unavailable */ }
+  applyTheme();
+};
+darkQuery.addEventListener('change', applyTheme);
+
+function resize() {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ---------- terrain ----------
+function buildTerrain(h, g) {
+  const nx = g.nx, ny = g.ny, n = nx * ny;
+  const pos = new Float32Array(n * 3), uv = new Float32Array(n * 2);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const k = j * nx + i;
+    pos[3 * k] = g.x0 + i + 0.5;
+    pos[3 * k + 1] = h[k];
+    pos[3 * k + 2] = -(g.y1 - j - 0.5);
+    uv[2 * k] = i / (nx - 1);
+    uv[2 * k + 1] = 1 - j / (ny - 1);
+  }
+  const idx = new Uint32Array((nx - 1) * (ny - 1) * 6);
+  let t = 0;
+  for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+    const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1;
+    idx[t++] = a; idx[t++] = c; idx[t++] = b; idx[t++] = b; idx[t++] = c; idx[t++] = d;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  geo.computeVertexNormals();
+  const tex = new THREE.TextureLoader().load('terrain_texture.jpg');
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  tex.encoding = THREE.sRGBEncoding;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  return new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: tex }));
+}
+
+// ---------- buildings (buildings.json from build_3d_model.py) ----------
+// Roofs carry the aerial photo with the terrain's UV mapping; walls and domes are plain colours.
+const WALL_COLOUR = '#d4d0c8', DOME_COLOUR = '#f2f2ef';
+const domeByBuilding = {};
+// Shutter slit: a band of constant width SLIT_WIDTH_R x r on the dome, from the spring line on the pointing side
+// over the top to SLIT_OVERSHOOT_DEG past the zenith (representative proportions, not measured)
+const SLIT_WIDTH_R = 0.45, SLIT_OVERSHOOT_DEG = 12, SLIT_COLOUR = '#1b1f26', SLIT_EDGE_COLOUR = '#c9ced8';
+function slitGeometry(r) {
+  const R = r * 1.004, half = SLIT_WIDTH_R * r / 2, nt = 24, nw = 4;
+  const tmax = (90 + SLIT_OVERSHOOT_DEG) * Math.PI / 180;
+  const pos = [], idx = [];
+  for (let i = 0; i <= nt; i++) {
+    const t = tmax * i / nt;
+    for (let j = 0; j <= nw; j++) {
+      const w = -half + 2 * half * j / nw, s = Math.sqrt(R * R - w * w);
+      // local frame: slit faces north (-z), across = east (+x)
+      pos.push(w, s * Math.sin(t), -s * Math.cos(t));
+    }
+  }
+  for (let i = 0; i < nt; i++) for (let j = 0; j < nw; j++) {
+    const a = i * (nw + 1) + j, b = a + 1, c = a + nw + 1, d = c + 1;
+    idx.push(a, c, b, b, c, d);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  // outline (unlit, so the opening stays visible when the terrain lighting is dimmed at night); unlit colours are
+  // converted to linear so the sRGB output shows them as written
+  const ring = [];
+  for (let i = 0; i <= nt; i++) ring.push(i * (nw + 1));
+  for (let j = 1; j <= nw; j++) ring.push(nt * (nw + 1) + j);
+  for (let i = nt - 1; i >= 0; i--) ring.push(i * (nw + 1) + nw);
+  for (let j = nw - 1; j >= 0; j--) ring.push(j);
+  const outline = new THREE.BufferGeometry().setFromPoints(ring.map(k => new THREE.Vector3(pos[3 * k], pos[3 * k + 1], pos[3 * k + 2])));
+  return { g, outline };
+}
+function addSlit(d) {
+  const { g, outline } = slitGeometry(d.r);
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({
+    color: new THREE.Color(SLIT_COLOUR).convertSRGBToLinear(), side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  m.add(new THREE.Line(outline, new THREE.LineBasicMaterial({ color: new THREE.Color(SLIT_EDGE_COLOUR).convertSRGBToLinear() })));
+  m.position.set(d.x, d.spring_m, -d.y);
+  m.visible = false;
+  scene.add(m);
+  return m;
+}
+// Colours per building from building_styles.json (sampled from site photos); sRGB hex converted to linear so the
+// sRGB output shows them as sampled under neutral light
+function addBuildings(B, g, map, styles) {
+  const nx = g.nx, ny = g.ny;
+  const roofMat = new THREE.MeshLambertMaterial({ map, side: THREE.DoubleSide });
+  const lin = hex => new THREE.Color(hex).convertSRGBToLinear();
+  const mats = {};
+  const mat = hex => mats[hex] || (mats[hex] = new THREE.MeshLambertMaterial({ color: lin(hex), side: THREE.DoubleSide }));
+  const wallMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  const def = (styles && styles.default) || { wall: WALL_COLOUR, dome: DOME_COLOUR, drum: DOME_COLOUR };
+  const group = new THREE.Group();
+  for (const b of B) {
+    const st = { ...def, ...((styles && styles.buildings && styles.buildings[b.name]) || {}) };
+    if (!b.dome_only) {
+      const r = b.roof_xyz, n = r.length / 3;
+      const pos = new Float32Array(n * 3), uv = new Float32Array(n * 2);
+      for (let k = 0; k < n; k++) {
+        const x = r[3 * k], y = r[3 * k + 1];
+        pos[3 * k] = x; pos[3 * k + 1] = r[3 * k + 2]; pos[3 * k + 2] = -y;
+        uv[2 * k] = (x - g.x0 - 0.5) / (nx - 1);
+        uv[2 * k + 1] = 1 - (g.y1 - 0.5 - y) / (ny - 1);
+      }
+      const roof = new THREE.BufferGeometry();
+      roof.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      roof.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      roof.setIndex(b.roof_tri);
+      roof.computeVertexNormals();
+      group.add(new THREE.Mesh(roof, roofMat));
+      // Walls: per edge segment a lower quad (wall colour) and, with a top band, an upper quad (wall_top colour);
+      // own vertices so each face is lit flat
+      const e = b.edge_xy, m = e.length / 2, wp = [], wc = [];
+      const cw = lin(st.wall), ct = lin(st.wall_top || st.wall), band = st.wall_top ? st.wall_top_m || 0 : 0;
+      const quad = (x0, y0, x1, y1, a0, a1, b0, b1, c) => {
+        wp.push(x0, a0, -y0, x1, a1, -y1, x1, b1, -y1, x0, a0, -y0, x1, b1, -y1, x0, b0, -y0);
+        for (let i = 0; i < 6; i++) wc.push(c.r, c.g, c.b);
+      };
+      for (let k = 0; k < m; k++) {
+        const k2 = (k + 1) % m;
+        const x0 = e[2 * k], y0 = e[2 * k + 1], x1 = e[2 * k2], y1 = e[2 * k2 + 1];
+        const g0 = b.edge_ground[k], g1 = b.edge_ground[k2], t0 = b.edge_top[k], t1 = b.edge_top[k2];
+        const s0 = Math.max(g0, t0 - band), s1 = Math.max(g1, t1 - band);
+        quad(x0, y0, x1, y1, g0, g1, s0, s1, cw);
+        if (band > 0) quad(x0, y0, x1, y1, s0, s1, t0, t1, ct);
+      }
+      const wall = new THREE.BufferGeometry();
+      wall.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3));
+      wall.setAttribute('color', new THREE.Float32BufferAttribute(wc, 3));
+      wall.computeVertexNormals();
+      group.add(new THREE.Mesh(wall, wallMat));
+    }
+    if (b.dome) {
+      const d = b.dome;
+      domeByBuilding[b.name] = d;
+      // cap above the base: full hemisphere if the spring line is above the base, else the part above the base
+      const theta = d.spring_m >= d.base_m ? Math.PI / 2 : Math.acos(Math.min(1, (d.base_m - d.spring_m) / d.r));
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(d.r, 40, 20, 0, 2 * Math.PI, 0, theta), mat(st.dome));
+      cap.position.set(d.x, d.spring_m, -d.y);
+      group.add(cap);
+      // drum down to the lowest ground under the dome (hidden inside the building where the dome sits on a roof),
+      // with an optional base band (MOA-II plinth)
+      const bottom = Math.min(d.ground_m, d.base_m), top = Math.max(d.spring_m, d.base_m);
+      const split = st.drum_base ? Math.min(top, bottom + (st.drum_base_m || 0)) : bottom;
+      const cyl = (y0, y1, hex) => {
+        if (y1 - y0 <= 0.05) return;
+        const c = new THREE.Mesh(new THREE.CylinderGeometry(d.r, d.r, y1 - y0, 40, 1, true), mat(hex));
+        c.position.set(d.x, (y0 + y1) / 2, -d.y);
+        group.add(c);
+      };
+      cyl(bottom, split, st.drum_base || st.drum);
+      cyl(split, top, st.drum || st.dome);
+    }
+  }
+  return group;
+}
+
+// ---------- telescopes ----------
+const COND_TEXT = { fault: 'Instrument fault', weather: 'Weather closure', '': 'Nominal' };
+const CLOSURE_REASONS = ['wind', 'rain', 'humidity', 'cloud'];
+function condClass(p) {
+  const c = (p.condition || p.status || '').toLowerCase();
+  return c.includes('fault') ? 'fault' : c.includes('weather') ? 'weather' : '';
+}
+function closureReasons(p) {
+  const r = p.closure_reason;
+  const list = Array.isArray(r) ? r : (r ? String(r).split(/[,;/ ]+/) : []);
+  return list.map(x => x.toLowerCase()).filter(x => CLOSURE_REASONS.includes(x));
+}
+function condText(p) {
+  const cc = condClass(p), rs = cc === 'weather' ? closureReasons(p) : [];
+  return COND_TEXT[cc] + (rs.length ? ': ' + rs.join(', ') : '');
+}
+function addScopes() {
+  const tbody = document.querySelector('#scopes tbody');
+  model.telescopes.forEach((s, i) => {
+    const col = new THREE.Color(COLORS[i % COLORS.length]);
+    // beam from the dome centre (spring line), marker on the dome top above it
+    const origin = new THREE.Vector3(s.x_east_m, s.dome_centre_m ?? s.dome_top_m - 1.5, -s.y_north_m);
+    const marker = new THREE.Mesh(new THREE.SphereGeometry(1.6, 16, 12), new THREE.MeshBasicMaterial({ color: col }));
+    marker.position.set(s.x_east_m, s.dome_top_m - 1.5, -s.y_north_m);
+    const beamGeo = new THREE.CylinderGeometry(0.6, 0.6, BEAM_LEN, 8, 1, true);
+    beamGeo.translate(0, BEAM_LEN / 2, 0);
+    const beam = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.55 }));
+    beam.position.copy(origin);
+    beam.visible = false;
+    const pick = new THREE.Mesh(new THREE.SphereGeometry(6, 12, 8), new THREE.MeshBasicMaterial({ visible: false }));
+    pick.position.copy(origin);
+    pick.userData.id = s.id;
+    pickables.push(pick);
+    scene.add(marker, beam, pick);
+    const row = document.createElement('tr');
+    row.innerHTML = `<td><span class="swatch" style="background:${COLORS[i % COLORS.length]}"></span>${s.name}</td><td>–</td><td>–</td><td>–</td>`;
+    row.onclick = () => showDetail(s.id);
+    tbody.appendChild(row);
+    const el = label(s.name, 'scope');
+    el.onclick = () => showDetail(s.id);
+    const dome = domeByBuilding[s.osm_building];
+    scopeObjs[s.id] = { s, marker, beam, row, pick, el, derived: {}, slit: dome ? addSlit(dome) : null };
+    labels.push({ el, obj: s, kind: 'scope' });
+  });
+  model.buildings.forEach(b => labels.push({ el: label(b.name, 'bldg'), obj: b, kind: 'bldg' }));
+}
+function applyTelescopes(st) {
+  lastTel = st;
+  for (const [id, o] of Object.entries(scopeObjs)) {
+    const p = (st && st.telescopes && st.telescopes[id]) || null;
+    const c = o.row.children;
+    if (!p) { o.beam.visible = false; if (o.slit) o.slit.visible = false; c[1].textContent = c[2].textContent = c[3].textContent = '–'; o.derived = {}; continue; }
+    const cc = condClass(p), rs = cc === 'weather' ? closureReasons(p) : [];
+    const closed = cc === 'weather' || /closed/i.test(p.status || '');
+    const hasPos = p.alt_deg != null && p.az_deg != null;
+    if (hasPos) o.beam.quaternion.setFromUnitVectors(UP, altazVec(p.alt_deg, p.az_deg));
+    // Closed: no beam. Fault: always a beam, drawn through the terrain. Nominal: beam when above the horizon.
+    o.beam.visible = hasPos && !closed && (p.alt_deg > 0 || cc === 'fault');
+    o.beam.material.depthTest = cc !== 'fault';
+    // Shutter: from the feed's 'shutter' when given, otherwise open unless the telescope is closed; the slit
+    // turns with the telescope's azimuth
+    if (o.slit) {
+      const open = p.shutter ? p.shutter === 'open' : !closed;
+      o.slit.visible = open && hasPos;
+      if (hasPos) o.slit.rotation.y = -p.az_deg * Math.PI / 180;
+    }
+    o.beam.renderOrder = cc === 'fault' ? 10 : 0;
+    const d = o.derived = {};
+    if (hasPos) {
+      d.horizon = horizonAt(o.s, p.az_deg);
+      d.obstructed = !closed && p.alt_deg < d.horizon && d.horizon > 0;
+      if (moonAltAz && moonAltAz.alt > 0) d.moonSep = angSep(p.alt_deg, p.az_deg, moonAltAz.alt, moonAltAz.az);
+    }
+    c[1].textContent = hasPos ? p.alt_deg.toFixed(1) + '°' : '–';
+    c[2].textContent = hasPos ? p.az_deg.toFixed(1) + '°' : '–';
+    const flags = [];
+    if (d.obstructed) flags.push('obstructed');
+    if (!closed && d.moonSep != null && d.moonSep < cfg.moon_warn_deg) flags.push('near Moon');
+    c[3].innerHTML = esc((p.status || '') + (rs.length ? ` (${rs.join(', ')})` : '')) +
+      (flags.length ? ` <span class="warn">· ${flags.join(', ')}</span>` : '');
+    c[3].className = cc ? 'cond-' + cc : '';
+    o.el.className = 'label scope' + (cc ? ' ' + cc : '');
+  }
+  if (selected) showDetail(selected);
+  const ref = now();
+  let txt = 'Telescopes: ';
+  if (!st) txt += 'no data';
+  else if (!st.updated_utc) txt += 'demo data, no live feed yet';
+  else if (/mock/i.test(st.note || '')) txt += `mock data (${st.updated_utc.slice(0, 16).replace('T', ' ')} UTC)`;
+  else {
+    const stale = mode === 'live' && (ref - new Date(st.updated_utc)) / 1000 > cfg.telescope_stale_after_s;
+    txt += (stale ? '<span class="warn">stale, </span>' : '') + `updated ${ago(st.updated_utc, ref)} ago`;
+  }
+  $('status').innerHTML = txt;
+}
+function showDetail(id) {
+  selected = id;
+  const o = scopeObjs[id], p = (lastTel && lastTel.telescopes && lastTel.telescopes[id]) || {}, d = o.derived || {};
+  $('dname').textContent = o.s.name;
+  const cc = condClass(p);
+  const rows = [
+    ['Condition', `<span class="${cc === 'fault' ? 'bad' : cc === 'weather' ? 'warn' : ''}">${esc(condText(p))}</span>`],
+    ['Status', esc(p.status)], ['Current target', esc(p.current_target)],
+    ['Altitude', p.alt_deg != null ? p.alt_deg.toFixed(1) + '°' : '–'],
+    ['Azimuth', p.az_deg != null ? p.az_deg.toFixed(1) + '°' : '–'],
+    ['Local horizon', d.horizon != null ? `${d.horizon.toFixed(1)}° at this azimuth` +
+      (d.obstructed ? ' <span class="bad">· pointing at an obstruction</span>' : '') : '–'],
+    ['Moon distance', d.moonSep != null ? `${d.moonSep.toFixed(0)}°` +
+      (d.moonSep < cfg.moon_warn_deg ? ` <span class="warn">· within ${cfg.moon_warn_deg}°</span>` : '') :
+      (moonAltAz && moonAltAz.alt <= 0 ? 'Moon below horizon' : '–')],
+    ['Updated (UTC)', esc(lastTel && lastTel.updated_utc ? lastTel.updated_utc : 'no live feed yet')]];
+  $('dstate').innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+  const q = p.queue || [];
+  $('dqueue').innerHTML = q.length
+    ? q.map(e => `<tr><td>${esc(e.start_utc)}</td><td>${esc(e.target)}</td><td>${esc(e.filter)}</td><td>${esc(e.exposure_s)}</td><td>${esc(e.program)}</td></tr>`).join('')
+    : '<tr><td colspan="5">No queue received</td></tr>';
+  const done = p.completed || [];
+  $('ddone').innerHTML = done.length
+    ? done.map(e => `<tr><td>${esc(e.start_utc)}–${esc(e.end_utc)}</td><td>${esc(e.target)}</td><td>${esc(e.filter)}</td>` +
+        `<td class="${/interrupted/.test(e.result || '') ? 'warn' : ''}">${esc(e.result)}</td></tr>`).join('')
+    : '<tr><td colspan="4">None yet tonight</td></tr>';
+  $('detail').style.display = 'flex';
+  Object.values(scopeObjs).forEach(x => x.marker.scale.setScalar(x.s.id === id ? 1.8 : 1));
+}
+$('dclose').onclick = () => {
+  selected = null;
+  $('detail').style.display = 'none';
+  Object.values(scopeObjs).forEach(x => x.marker.scale.setScalar(1));
+};
+
+// ---------- weather ----------
+function addWind() {
+  windArrow = arrow(WIND_BASE_LEN, 1.2, getComputedStyle(document.documentElement).getPropertyValue('--wind').trim(), 1);
+  windArrow.visible = false;
+  scene.add(windArrow);
+  windLabel = label('', 'wind');
+}
+function ruleRows(w) {
+  // One row per telescope: the limit closest to (or beyond) its threshold
+  const rows = [];
+  for (const t of model.telescopes) {
+    const r = cfg.closure_rules[t.id];
+    if (!r) continue;
+    const checks = [];
+    if (r.wind_speed_kmh) checks.push(['mean wind', w.wind_speed_kmh, r.wind_speed_kmh, 'km/h']);
+    if (r.wind_gust_kmh) checks.push(['gust', w.wind_gust_kmh, r.wind_gust_kmh, 'km/h']);
+    if (r.humidity_pct) checks.push(['humidity', w.humidity_pct, r.humidity_pct, '%']);
+    let worst = null;
+    for (const [name, v, lim, unit] of checks) {
+      if (v == null) continue;
+      const f = v / lim;
+      if (!worst || f > worst.f) worst = { name, v, lim, unit, f };
+    }
+    const raining = r.rain && w.rain_rate_mm_h > 0;
+    let state = 'OK', cls = '';
+    if (raining || (worst && worst.f > 1)) { state = raining ? 'Raining' : 'Above limit'; cls = 'bad'; }
+    else if (worst && worst.f >= cfg.warn_fraction) { state = 'Near limit'; cls = 'warn'; }
+    const detail = worst ? `${worst.name} ${worst.v.toFixed(0)} / ${worst.lim} ${worst.unit}` : 'no data';
+    rows.push(`<tr title="${esc(r.source)}"><td>${esc(t.name)}</td><td>${detail}</td><td class="${cls}">${state}</td></tr>`);
+  }
+  return rows.join('');
+}
+function applyWeather(w) {
+  lastWx = w;
+  if (!w) { $('wstatus').textContent = 'No weather data'; windArrow.visible = false; $('limits').innerHTML = ''; return; }
+  const spd = w.wind_speed_kmh, gust = w.wind_gust_kmh, dir = w.wind_dir_deg;
+  $('wspeed').textContent = spd != null ? spd.toFixed(0) + ' km/h' : '– km/h';
+  $('wgust').textContent = 'Gusts ' + (gust != null ? gust.toFixed(0) : '–') + ' km/h';
+  $('wdir').textContent = dir != null ? `From ${card(dir)} (${dir.toFixed(0)}°)` : 'From –';
+  const extra = [];
+  if (w.temperature_c != null) extra.push(w.temperature_c.toFixed(1) + ' °C');
+  if (w.humidity_pct != null) extra.push(w.humidity_pct.toFixed(0) + '% RH');
+  if (w.rain_rate_mm_h != null) extra.push(w.rain_rate_mm_h > 0 ? `rain ${w.rain_rate_mm_h.toFixed(1)} mm/h` : 'no rain');
+  $('wextra').textContent = extra.join(', ');
+  $('limits').innerHTML = ruleRows(w);
+  const ref = now();
+  let s = esc(w.station || 'Weather') + ', ';
+  if (!w.updated_utc) s += 'demo data, no live feed yet';
+  else {
+    const stale = mode === 'live' && (ref - new Date(w.updated_utc)) / 1000 > cfg.weather_stale_after_s;
+    s += (stale ? '<span class="warn">stale, </span>' : '') + `data ${ago(w.updated_utc, ref)} old`;
+  }
+  $('wstatus').innerHTML = s;
+  if (dir != null) {
+    $('windarrow').setAttribute('transform', `rotate(${dir})`);
+    if (spd != null) {
+      windArrow.userData.setLength(WIND_BASE_LEN + WIND_M_PER_KMH * spd);
+      const to = THREE.MathUtils.degToRad((dir + 180) % 360);
+      windArrow.quaternion.setFromUnitVectors(UP, new THREE.Vector3(Math.sin(to), 0, -Math.cos(to)));
+      windArrow.visible = true;
+      windLabel.textContent = `Wind ${spd.toFixed(0)} km/h from ${card(dir)}`;
+    }
+  }
+}
+
+// ---------- sky: Sun, Moon, twilight ----------
+let sunMesh, moonMesh, sunLabel, moonLabel, moonArrow, moonArrowLabel;
+const sunDir = new THREE.Vector3(0, 1, 0);
+const SKY_KEYS = [[-90, '#04060c'], [-18, '#060a15'], [-12, '#0c1530'], [-6, '#1d2c58'], [-3, '#5a4a72'],
+                  [-0.5, '#c4826a'], [2, '#e3a07c'], [6, '#9cc3e6'], [20, '#82b6e6'], [90, '#5f9fdc']];
+function skyColour(alt) {
+  for (let i = 1; i < SKY_KEYS.length; i++) {
+    const [a1, c1] = SKY_KEYS[i];
+    if (alt <= a1) {
+      const [a0, c0] = SKY_KEYS[i - 1];
+      return new THREE.Color(c0).lerp(new THREE.Color(c1), (alt - a0) / (a1 - a0));
+    }
+  }
+  return new THREE.Color(SKY_KEYS[SKY_KEYS.length - 1][1]);
+}
+function skyStage(alt) {
+  return alt > 0 ? 'Daylight' : alt > -6 ? 'Civil twilight' : alt > -12 ? 'Nautical twilight' :
+         alt > -18 ? 'Astronomical twilight' : 'Night';
+}
+function phaseName(illum, elong) {
+  const waxing = elong < 180;
+  if (illum < 0.02) return 'New moon';
+  if (illum > 0.98) return 'Full moon';
+  if (Math.abs(illum - 0.5) < 0.05) return waxing ? 'First quarter' : 'Last quarter';
+  return (waxing ? 'Waxing ' : 'Waning ') + (illum < 0.5 ? 'crescent' : 'gibbous');
+}
+function hor(body, t) {
+  const eq = Astronomy.Equator(body, t, observer, true, true);
+  return Astronomy.Horizon(t, observer, eq.ra, eq.dec, 'normal');
+}
+function addSky() {
+  observer = new Astronomy.Observer(model.summit.lat_deg, model.summit.lon_deg, model.summit.ground_m_asl);
+  sunMesh = new THREE.Mesh(new THREE.SphereGeometry(SUN_R, 32, 16), new THREE.MeshBasicMaterial({ color: '#fff3e0' }));
+  sunMesh.add(new THREE.Mesh(new THREE.SphereGeometry(SUN_R * 1.8, 32, 16),
+    new THREE.MeshBasicMaterial({ color: '#ffd8a8', transparent: true, opacity: 0.25 })));
+  moonMesh = new THREE.Mesh(new THREE.SphereGeometry(MOON_R, 48, 24), new THREE.ShaderMaterial({
+    uniforms: { sunDir: { value: sunDir } },
+    vertexShader: 'varying vec3 vN; void main() { vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform vec3 sunDir; varying vec3 vN; void main() { float d = smoothstep(-0.03, 0.03, dot(vN, sunDir)); gl_FragColor = vec4(mix(vec3(0.07, 0.075, 0.09), vec3(0.93, 0.92, 0.88), d), 1.0); }'
+  }));
+  scene.add(sunMesh, moonMesh);
+  sunLabel = label('Sun', 'sky');
+  moonLabel = label('Moon', 'sky');
+  moonArrow = arrow(MOON_ARROW_LEN, 0.9, '#d0d4dc', 0.85);
+  scene.add(moonArrow);
+  moonArrowLabel = label('Moon', 'sky');
+}
+// Terrain lighting follows the sky: full daylight with the Sun above 6 deg, fading through
+// twilight to a cool night floor (kept readable), plus moonlight from the Moon's direction scaled by its lit fraction.
+const NIGHT_FLOOR = 0.22, MOON_GAIN = 0.35;
+function dimTerrain(sh, mh, illum, mv) {
+  const day = THREE.MathUtils.clamp((sh.altitude + 12) / 18, 0, 1);
+  const moon = mh.altitude > 0 ? MOON_GAIN * illum * Math.sin(mh.altitude * Math.PI / 180) : 0;
+  hemi.intensity = 0.75 * (NIGHT_FLOOR + (1 - NIGHT_FLOOR) * day) + moon * 0.5;
+  hemi.color.set(day > 0.5 ? '#ffffff' : '#9fb4d8');
+  if (day > 0 || moon === 0) {
+    sun.position.copy(sunDir).multiplyScalar(500);
+    sun.intensity = 0.75 * day;
+    sun.color.set('#ffffff');
+  } else {
+    sun.position.copy(mv).multiplyScalar(500);
+    sun.intensity = moon;
+    sun.color.set('#c8d4ff');
+  }
+}
+function updateSky() {
+  const t = now();
+  const sh = hor(Astronomy.Body.Sun, t), mh = hor(Astronomy.Body.Moon, t);
+  moonAltAz = { alt: mh.altitude, az: mh.azimuth };
+  sunDir.copy(altazVec(sh.altitude, sh.azimuth));
+  sunMesh.position.copy(sunDir).multiplyScalar(SKY_R);
+  const mv = altazVec(mh.altitude, mh.azimuth);
+  moonMesh.position.copy(mv).multiplyScalar(SKY_R);
+  moonArrow.quaternion.setFromUnitVectors(UP, mv);
+  sunMesh.visible = sh.altitude > -1;
+  moonMesh.visible = moonArrow.visible = mh.altitude > -1;
+  scene.background = skyColour(sh.altitude);
+  const illum = Astronomy.Illumination(Astronomy.Body.Moon, t).phase_fraction;
+  dimTerrain(sh, mh, illum, mv);
+  const fmt = h => h.altitude > -1 ? `alt ${h.altitude.toFixed(1)}°, az ${h.azimuth.toFixed(1)}°` : `below horizon (alt ${h.altitude.toFixed(1)}°)`;
+  $('sunpos').textContent = fmt(sh);
+  $('moonpos').textContent = fmt(mh);
+  $('moonphase').textContent = `${phaseName(illum, Astronomy.MoonPhase(t))}, ${(illum * 100).toFixed(0)}% lit`;
+  $('skystage').textContent = skyStage(sh.altitude);
+  $('skytime').textContent = `${fmtLocal(t)} ${tzName(t)}, ${t.toISOString().slice(11, 16)} UTC` +
+    (mode === 'replay' ? ' (replay)' : params.get('time') ? ' (set by link)' : '');
+  moonLabel.textContent = `Moon, ${(illum * 100).toFixed(0)}% lit`;
+  moonArrowLabel.textContent = `Moon: alt ${mh.altitude.toFixed(0)}°, az ${mh.azimuth.toFixed(0)}°`;
+}
+// ---------- alert targets (optional layer) ----------
+const alertObjs = [];
+function clearAlerts() {
+  alertObjs.forEach(a => { scene.remove(a.g); a.el.remove(); });
+  alertObjs.length = 0;
+}
+function applyAlerts(a) {
+  lastAlerts = a;
+  clearAlerts();
+  const on = $('showalerts').checked;
+  $('alerts').style.display = on ? 'block' : 'none';
+  if (!on) return;
+  const t = now(), at = Astronomy.MakeTime(t), list = (a && a.alerts) || [];
+  const rot = Astronomy.Rotation_EQJ_HOR(at, observer);
+  const rows = [];
+  for (const al of list) {
+    // J2000 RA/Dec to topocentric alt/az (no refraction)
+    const h = Astronomy.HorizonFromVector(Astronomy.RotateVector(rot, Astronomy.VectorFromSphere({ lat: al.dec_deg, lon: al.ra_deg, dist: 1 }, at)), '');
+    const alt = h.lat, az = h.lon;
+    const reach = model.telescopes.filter(s => alt > 0 && alt > horizonAt(s, az)).map(s => s.name);
+    rows.push(`<tr><td>${esc(al.id)}<div class="status">${esc(al.source || '')} ${esc(al.type || '')}</div></td>` +
+      `<td>${alt.toFixed(0)}°</td><td>${alt > 0 ? (reach.join(', ') || 'none (blocked)') : 'below horizon'}</td></tr>`);
+    if (alt > 0) {
+      const g = arrow(ALERT_ARROW_LEN, 0.8, '#cc5de8', 0.9);
+      g.quaternion.setFromUnitVectors(UP, altazVec(alt, az));
+      scene.add(g);
+      alertObjs.push({ g, el: label(al.id, 'alert') });
+    }
+  }
+  $('alertrows').innerHTML = rows.join('') || '<tr><td colspan="3">No alerts</td></tr>';
+  $('alertstatus').textContent = a && a.updated_utc ? `Alerts updated ${ago(a.updated_utc, t)} ago` : 'No alert feed yet';
+}
+$('showalerts').addEventListener('change', () => applyAlerts(lastAlerts));
+
+// ---------- live polling ----------
+async function getJSON(name) {
+  const r = await fetch(name + '?t=' + Date.now(), { cache: 'no-store' });
+  if (!r.ok) throw new Error(name + ' ' + r.status);
+  return r.json();
+}
+async function pollLive() {
+  if (mode !== 'live') return;
+  const [tel, wx, al] = await Promise.all(['telescope_state.json', 'weather_state.json', 'alerts_state.json']
+    .map(n => getJSON(n).catch(() => null)));
+  if (mode !== 'live') return;
+  updateSky();
+  applyTelescopes(tel);
+  applyWeather(wx);
+  if ($('showalerts').checked) applyAlerts(al); else lastAlerts = al;
+}
+
+// ---------- replay ----------
+const histDir = () => params.get('history') || cfg.history_dir;
+async function loadHistory(dateStr) {
+  // Night starting on local date dateStr: from 1 h before sunset to 1 h after sunrise. 00 UTC is about midday in NZ.
+  const sunset = Astronomy.SearchRiseSet(Astronomy.Body.Sun, observer, -1, new Date(dateStr + 'T00:00:00Z'), 1).date;
+  const sunrise = Astronomy.SearchRiseSet(Astronomy.Body.Sun, observer, +1, sunset, 1).date;
+  const t0 = +sunset - 36e5, t1 = +sunrise + 36e5;
+  const days = [...new Set([t0, t1].map(x => new Date(x).toISOString().slice(0, 10)))];
+  const rec = { telescopes: [], weather: [], alerts: [] };
+  for (const kind of Object.keys(rec)) {
+    for (const d of days) {
+      try {
+        const r = await fetch(`${histDir()}/${d}_${kind}.jsonl?t=${Date.now()}`, { cache: 'no-store' });
+        if (!r.ok) continue;
+        (await r.text()).split('\n').filter(Boolean).forEach(l => { const o = JSON.parse(l); o.ms = +new Date(o.t); rec[kind].push(o); });
+      } catch (e) { /* missing day */ }
+    }
+    rec[kind].sort((a, b) => a.ms - b.ms);
+  }
+  // Start at the first recorded moment if the history begins after the nominal start
+  const first = Math.min(...Object.values(rec).filter(l => l.length).map(l => l[0].ms));
+  return { t0, t1, rec, t: Number.isFinite(first) ? Math.max(t0, Math.min(first, t1)) : t0, playing: false };
+}
+async function latestNight() {
+  // Most recent night with history: the newest date in the history folder's index.json (feeds/common.py)
+  try {
+    const dates = (await getJSON(histDir() + '/index.json')).dates.sort();
+    return dates.length ? dates[dates.length - 1] : null;
+  } catch (e) { return null; }
+}
+function atTime(list, ms) {
+  // Latest record at or before ms; before the first record, use it if it is within 15 min
+  let best = null;
+  for (const r of list) { if (r.ms <= ms) best = r; else break; }
+  if (!best && list.length && list[0].ms - ms < 15 * 6e4) best = list[0];
+  return best ? best.state : null;
+}
+function applyReplay() {
+  const ms = replay.t;
+  $('rslider').value = Math.round((ms - replay.t0) / (replay.t1 - replay.t0) * 1000);
+  const d = new Date(ms);
+  $('rtime').textContent = `${fmtLocal(d)} ${tzName(d)}`;
+  updateSky();
+  applyTelescopes(atTime(replay.rec.telescopes, ms));
+  applyWeather(atTime(replay.rec.weather, ms));
+  applyAlerts(atTime(replay.rec.alerts, ms));
+  if (!replay.rec.telescopes.length && !replay.rec.weather.length)
+    $('status').innerHTML = '<span class="warn">No history recorded for this night</span>';
+}
+async function setMode(m, dateStr) {
+  mode = m;
+  $('m-live').classList.toggle('on', m === 'live');
+  $('m-replay').classList.toggle('on', m === 'replay');
+  $('replaybar').style.display = m === 'replay' ? 'flex' : 'none';
+  if (m === 'replay') {
+    const d = dateStr || await latestNight() || new Date(Date.now() - 12 * 36e5).toLocaleDateString('en-CA', { timeZone: cfg.timezone });
+    $('rdate').value = d;
+    replay = await loadHistory(d);
+    const pt = params.get('time') ? +new Date(params.get('time')) : null;
+    if (pt && pt > replay.t0 && pt < replay.t1) replay.t = pt;  // ?time= sets the replay position
+    applyReplay();
+  } else {
+    replay = null;
+    pollLive();
+  }
+}
+$('m-live').onclick = () => setMode('live');
+$('m-replay').onclick = () => setMode('replay');
+$('rdate').onchange = async e => { replay = await loadHistory(e.target.value); applyReplay(); };
+$('rslider').oninput = e => { if (!replay) return; replay.t = replay.t0 + (replay.t1 - replay.t0) * e.target.value / 1000; applyReplay(); };
+$('rplay').onclick = () => { if (!replay) return; replay.playing = !replay.playing; $('rplay').textContent = replay.playing ? 'Pause' : 'Play'; };
+let lastFrame = performance.now();
+function stepReplay(nowMs) {
+  const dt = nowMs - lastFrame;
+  lastFrame = nowMs;
+  if (mode === 'replay' && replay && replay.playing) {
+    replay.t = Math.min(replay.t1, replay.t + dt * parseFloat($('rspeed').value));
+    if (replay.t >= replay.t1) { replay.playing = false; $('rplay').textContent = 'Play'; }
+    applyReplay();
+  }
+}
+
+// ---------- picking, labels, render loop ----------
+let downAt = null;
+renderer.domElement.addEventListener('pointerdown', e => { downAt = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4) return;  // ignore drags
+  mouse.set(e.clientX / window.innerWidth * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+  raycaster.setFromCamera(mouse, camera);
+  const hit = raycaster.intersectObjects(pickables)[0];
+  if (hit) showDetail(hit.object.userData.id);
+});
+function placeLabels() {
+  const showB = $('blabels').checked;
+  for (const l of labels) {
+    const o = l.obj;
+    if (l.kind === 'bldg' && !showB) { l.el.style.display = 'none'; continue; }
+    place(l.el, o.x_east_m, l.kind === 'scope' ? o.dome_top_m + 4 : o.top_m + 3, -o.y_north_m);
+  }
+  if (sunMesh.visible) place(sunLabel, sunMesh.position.x, sunMesh.position.y + SUN_R * 2.2, sunMesh.position.z); else sunLabel.style.display = 'none';
+  if (moonMesh.visible) place(moonLabel, moonMesh.position.x, moonMesh.position.y + MOON_R * 1.6, moonMesh.position.z); else moonLabel.style.display = 'none';
+  if (moonArrow.visible) { const p = tipOf(moonArrow, 20); place(moonArrowLabel, p.x, p.y, p.z); } else moonArrowLabel.style.display = 'none';
+  if (windArrow.visible) { const p = tipOf(windArrow, 18); place(windLabel, p.x, p.y + 4, p.z); } else windLabel.style.display = 'none';
+  for (const a of alertObjs) { const p = tipOf(a.g, 16); place(a.el, p.x, p.y, p.z); }
+  const az = Math.atan2(camera.position.x - controls.target.x, -(camera.position.z - controls.target.z));
+  $('needle').style.transform = `rotate(${-THREE.MathUtils.radToDeg(az) + 180}deg) translateY(-14px)`;
+}
+function animate(t) {
+  requestAnimationFrame(animate);
+  stepReplay(t || performance.now());
+  controls.update();
+  renderer.render(scene, camera);
+  placeLabels();
+}
+
+// ---------- start ----------
+(async () => {
+  applyTheme();
+  cfg = await getJSON('config.json');
+  model = await getJSON('model.json');
+  const buf = await (await fetch('terrain_heights.bin')).arrayBuffer();
+  terrain = buildTerrain(new Float32Array(buf), model.grid);
+  scene.add(terrain);
+  const styles = await getJSON('building_styles.json').catch(() => null);
+  scene.add(addBuildings((await getJSON('buildings.json')).buildings, model.grid, terrain.material.map, styles));
+  addScopes();
+  addWind();
+  addSky();
+  applyTheme();
+  $('showalerts').checked = !!cfg.alerts_default_on;
+  if (params.get('theme')) { theme = params.get('theme'); applyTheme(); }
+  if (params.get('alerts') === '1') $('showalerts').checked = true;
+  if (params.get('replay')) await setMode('replay', params.get('replay'));
+  else await pollLive();
+  setInterval(pollLive, cfg.poll_seconds * 1000);
+  setInterval(() => { if (mode === 'live') updateSky(); }, 30000);
+  const sel = params.get('select');
+  if (sel && scopeObjs[sel]) showDetail(sel);
+  if (params.get('cam')) {  // test views: ?cam=x,y,z,targetx,targety,targetz (viewer frame: x east, y up, z south)
+    const c = params.get('cam').split(',').map(Number);
+    camera.position.set(c[0], c[1], c[2]);
+    controls.target.set(c[3], c[4], c[5]);
+    controls.update();
+  }
+  if (params.get('look') === 'moon') {  // camera at the summit looking at the Moon (used to check the phase)
+    camera.position.set(0, 20, 0);
+    controls.target.copy(moonMesh.position);
+    camera.fov = 8;
+    camera.updateProjectionMatrix();
+  }
+  requestAnimationFrame(animate);
+  window.viewerReady = true;
+})();
+</script>
+</body>
+</html>
