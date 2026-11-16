@@ -464,7 +464,7 @@ function applyTelescopes(st) {
   for (const [id, o] of Object.entries(scopeObjs)) {
     const p = (st && st.telescopes && st.telescopes[id]) || null;
     const c = o.row.children;
-    if (!p) { o.beam.visible = false; if (o.slit) o.slit.visible = false; c[1].textContent = c[2].textContent = c[3].textContent = '–'; o.derived = {}; continue; }
+    if (!p) { o.beam.visible = false; if (o.slit) o.slit.visible = false; o.row.className = ''; c[1].textContent = c[2].textContent = c[3].textContent = '–'; o.derived = {}; continue; }
     const cc = condClass(p), rs = cc === 'weather' ? closureReasons(p) : [];
     const closed = cc === 'weather' || /closed/i.test(p.status || '');
     const hasPos = p.alt_deg != null && p.az_deg != null;
@@ -493,7 +493,7 @@ function applyTelescopes(st) {
     if (!closed && d.moonSep != null && d.moonSep < cfg.moon_warn_deg) flags.push('near Moon');
     c[3].innerHTML = esc((p.status || '') + (rs.length ? ` (${rs.join(', ')})` : '')) +
       (flags.length ? ` <span class="warn">· ${flags.join(', ')}</span>` : '');
-    c[3].className = cc ? 'cond-' + cc : '';
+    o.row.className = cc ? 'cond-' + cc : '';
     o.el.className = 'label scope' + (cc ? ' ' + cc : '');
   }
   if (selected) showDetail(selected);
@@ -571,7 +571,7 @@ function ruleRows(w) {
     if (raining || (worst && worst.f > 1)) { state = raining ? 'Raining' : 'Above limit'; cls = 'bad'; }
     else if (worst && worst.f >= cfg.warn_fraction) { state = 'Near limit'; cls = 'warn'; }
     const detail = worst ? `${worst.name} ${worst.v.toFixed(0)} / ${worst.lim} ${worst.unit}` : 'no data';
-    rows.push(`<tr title="${esc(r.source)}"><td>${esc(t.name)}</td><td>${detail}</td><td class="${cls}">${state}</td></tr>`);
+    rows.push(`<tr title="${esc(r.source)}" class="${cls}"><td>${esc(t.name)}</td><td>${detail}</td><td>${state}</td></tr>`);
   }
   return rows.join('');
 }
