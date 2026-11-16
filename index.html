@@ -60,6 +60,11 @@
   #wind svg { width: 84px; height: 84px; flex: none; }
   #wind .big { font-size: 20px; font-weight: 700; }
   #sky .kv td:first-child { width: 48px; }
+  /* fixed columns sized for the widest text ('One Metre', 'Above limit') so a status change never moves the other columns */
+  #wind .limits { table-layout: fixed; }
+  #wind .limits td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #wind .limits td:first-child { width: 66px; }
+  #wind .limits td:last-child { width: 70px; }
   #wind h3 { font-size: 12px; color: var(--muted); font-weight: 600; margin: 8px 0 0; text-transform: uppercase; letter-spacing: 0.04em; }
   #replaybar { left: 50%; transform: translateX(-50%); bottom: 12px; display: none; align-items: center; gap: 8px; width: min(560px, calc(100vw - 420px)); min-width: 320px; }
   #replaybar input[type=range] { flex: 1; }
@@ -122,7 +127,7 @@
     </div>
   </div>
   <h3>Closure limits</h3>
-  <table><tbody id="limits"></tbody></table>
+  <table class="limits"><tbody id="limits"></tbody></table>
   <div id="wstatus" class="status"></div>
 </div>
 </div>
