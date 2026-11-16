@@ -44,6 +44,13 @@
   .label.scope.fault { animation: fault-flash 1s steps(1, end) infinite; }
   @keyframes fault-flash { 50% { color: #ffffff; } }
   @media (prefers-reduced-motion: reduce) { .label.scope.fault { animation: none; } }
+  /* fixed columns sized for the widest name and angles ('One Metre', '-10.0°', '359.9°') so a status change never
+     moves the other columns; long statuses wrap inside the status column */
+  #scopes { table-layout: fixed; }
+  #scopes th:nth-child(-n+3), #scopes td:nth-child(-n+3) { white-space: nowrap; }
+  #scopes th:first-child { width: 80px; }
+  #scopes th:nth-child(2) { width: 40px; }
+  #scopes th:nth-child(3) { width: 44px; }
   #scopes tbody tr { cursor: pointer; }
   #scopes tbody tr:hover { background: var(--hover); }
   #detail { top: 12px; right: 12px; width: 370px; display: none; flex-direction: column; z-index: 100; height: calc(100vh - 110px); }
