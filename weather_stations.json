@@ -1,0 +1,21 @@
+{
+ "note": "Weather node positions (place_weather_stations.py): m east/north of the summit; roof_m = roof height relative to the summit ground.",
+ "stations": [
+  {
+   "id": "node1",
+   "name": "Node 1",
+   "location": "DSP caf\u00e9",
+   "x_east_m": -6.7,
+   "y_north_m": 12.3,
+   "roof_m": 3.4
+  },
+  {
+   "id": "node2",
+   "name": "Node 2",
+   "location": "1m accommodation",
+   "x_east_m": -71.7,
+   "y_north_m": -161.4,
+   "roof_m": -17.3
+  }
+ ]
+}

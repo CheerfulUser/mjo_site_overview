@@ -1,12 +1,35 @@
 {
- "updated_utc": "2026-11-15T20:15:02Z",
- "fetched_utc": "2026-11-16T01:21:56Z",
- "station": "MJO weather node1",
- "note": "Wind speed: mean over the last 60 s; gust: maximum over the last 60 s; direction: vector mean, bearing the wind blows FROM.",
- "wind_speed_kmh": 21.4,
- "wind_gust_kmh": 25.9,
- "wind_dir_deg": 334.0,
- "temperature_c": 11.5,
- "humidity_pct": 88.2,
- "rain_rate_mm_h": 0.0
+ "updated_utc": "2026-11-19T02:53:50Z",
+ "fetched_utc": "2026-11-19T02:54:21Z",
+ "station": "MJO weather nodes 1 and 2",
+ "main_station": "node2",
+ "note": "Per node: the latest WeeWX archive record (10 s), direction = bearing the wind blows FROM. Main values: wind speed and direction from the windier node; the highest gust, humidity and rain rate of both; temperature from the windier node.",
+ "wind_speed_kmh": 16.0,
+ "wind_dir_deg": 203.0,
+ "wind_gust_kmh": 19.0,
+ "temperature_c": 14.9,
+ "humidity_pct": 32.0,
+ "rain_rate_mm_h": 0.0,
+ "stations": {
+  "node1": {
+   "updated_utc": "2026-11-19T02:53:50Z",
+   "configured_location": "DSP Cafe, Mt John Observatory, Tekapo",
+   "wind_speed_kmh": 13.0,
+   "wind_gust_kmh": 19.0,
+   "wind_dir_deg": 156.0,
+   "temperature_c": 15.3,
+   "humidity_pct": 32.0,
+   "rain_rate_mm_h": 0.0
+  },
+  "node2": {
+   "updated_utc": "2026-11-19T02:53:00Z",
+   "configured_location": "1M Accommodation, Mt John Observatory, Tekapo",
+   "wind_speed_kmh": 16.0,
+   "wind_gust_kmh": 19.0,
+   "wind_dir_deg": 203.0,
+   "temperature_c": 14.9,
+   "humidity_pct": 32.0,
+   "rain_rate_mm_h": 0.0
+  }
+ }
 }

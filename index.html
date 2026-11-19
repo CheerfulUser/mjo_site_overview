@@ -38,6 +38,7 @@
   .label.bldg { font-size: 11px; color: var(--bldg-label); }
   .label.scope { pointer-events: auto; cursor: pointer; font-weight: 600; }
   .label.wind, .label.sky { font-weight: 600; }
+  .label.station { font-size: 11px; }
   .label.alert { color: #e5b8ff; font-weight: 600; }
   .label.scope.fault, .cond-fault { color: #ff5c5c; }
   .label.scope.weather, .cond-weather { color: #ff922b; }
@@ -157,6 +158,8 @@
 // ?look=moon, ?alerts=1, ?history=<dir>, ?replay=<YYYY-MM-DD>.
 const COLORS = ['#ff6b6b', '#4dabf7', '#51cf66', '#ff922b', '#cc5de8', '#22b8cf', '#ffffff'];
 const BEAM_LEN = 120, ARROW_ORIGIN_Y = 12, WIND_BASE_LEN = 15, WIND_M_PER_KMH = 1.2;
+// Small arrows at each weather node (weather_stations.json), drawn STATION_ABOVE_ROOF m above its roof (mast heights unknown)
+const STATION_BASE_LEN = 5, STATION_M_PER_KMH = 0.4, STATION_ABOVE_ROOF = 4;
 const SKY_R = 1500, SUN_R = 45, MOON_R = 45, MOON_ARROW_LEN = 200, ALERT_ARROW_LEN = 170;
 const CARDINALS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 const params = new URLSearchParams(location.search);
@@ -230,13 +233,13 @@ function place(el, x, y, z) {
     el.style.top = ((1 - tmp.y) / 2 * window.innerHeight) + 'px';
   }
 }
-function arrow(len, radius, color, opacity) {
+function arrow(len, radius, color, opacity, headLen = 12) {
   const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity });
   const shaft = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, 1, 10), mat);
-  const head = new THREE.Mesh(new THREE.ConeGeometry(radius * 4.5, 12, 16), mat);
+  const head = new THREE.Mesh(new THREE.ConeGeometry(radius * 4.5, headLen, 16), mat);
   const g = new THREE.Group();
   g.add(shaft, head);
-  g.userData.setLength = L => { shaft.scale.y = L; shaft.position.y = L / 2; head.position.y = L + 6; g.userData.len = L; };
+  g.userData.setLength = L => { shaft.scale.y = L; shaft.position.y = L / 2; head.position.y = L + headLen / 2; g.userData.len = L; };
   g.userData.setLength(len);
   g.position.set(0, ARROW_ORIGIN_Y, 0);
   return g;
@@ -250,14 +253,15 @@ const THEMES = ['auto', 'light', 'dark'];
 let theme = 'auto';
 try { theme = localStorage.getItem('mjo3d-theme') || 'auto'; } catch (e) { /* storage unavailable */ }
 const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
-let windArrow = null, windLabel = null;
+let windArrow = null, windLabel = null, stationArrows = [];
 function applyTheme() {
   if (theme === 'auto') document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme', theme);
   $('theme').textContent = theme[0].toUpperCase() + theme.slice(1);
   const dark = theme === 'dark' || (theme === 'auto' && darkQuery.matches);
   hemi.intensity = sun.intensity = dark ? 0.55 : 0.75;
-  if (windArrow) windArrow.children.forEach(m => m.material.color.set(getComputedStyle(document.documentElement).getPropertyValue('--wind').trim()));
+  const windCol = getComputedStyle(document.documentElement).getPropertyValue('--wind').trim();
+  for (const a of [windArrow, ...stationArrows.map(s => s.g)]) if (a) a.children.forEach(m => m.material.color.set(windCol));
 }
 $('theme').onclick = () => {
   theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
@@ -556,11 +560,19 @@ $('dclose').onclick = () => {
 };
 
 // ---------- weather ----------
-function addWind() {
-  windArrow = arrow(WIND_BASE_LEN, 1.2, getComputedStyle(document.documentElement).getPropertyValue('--wind').trim(), 1);
+function addWind(stations) {
+  const col = getComputedStyle(document.documentElement).getPropertyValue('--wind').trim();
+  windArrow = arrow(WIND_BASE_LEN, 1.2, col, 1);
   windArrow.visible = false;
   scene.add(windArrow);
   windLabel = label('', 'wind');
+  for (const st of stations || []) {
+    const g = arrow(STATION_BASE_LEN, 0.35, col, 1, 4);
+    g.position.set(st.x_east_m, st.roof_m + STATION_ABOVE_ROOF, -st.y_north_m);
+    g.visible = false;
+    scene.add(g);
+    stationArrows.push({ st, g, el: label('', 'wind station') });
+  }
 }
 function ruleRows(w) {
   // One row per telescope: the limit closest to (or beyond) its threshold
@@ -589,7 +601,7 @@ function ruleRows(w) {
 }
 function applyWeather(w) {
   lastWx = w;
-  if (!w) { $('wstatus').textContent = 'No weather data'; windArrow.visible = false; $('limits').innerHTML = ''; return; }
+  if (!w) { $('wstatus').textContent = 'No weather data'; windArrow.visible = false; $('limits').innerHTML = ''; applyStations(null); return; }
   const spd = w.wind_speed_kmh, gust = w.wind_gust_kmh, dir = w.wind_dir_deg;
   $('wspeed').textContent = spd != null ? spd.toFixed(0) + ' km/h' : '– km/h';
   $('wgust').textContent = 'Gusts ' + (gust != null ? gust.toFixed(0) : '–') + ' km/h';
@@ -607,7 +619,12 @@ function applyWeather(w) {
     const stale = mode === 'live' && (ref - new Date(w.updated_utc)) / 1000 > cfg.weather_stale_after_s;
     s += (stale ? '<span class="warn">stale, </span>' : '') + `data ${ago(w.updated_utc, ref)} old`;
   }
+  // Per node (live feed with both weather nodes): the main values above are the highest of the two
+  const per = stationArrows.map(a => [a.st, w.stations && w.stations[a.st.id]]).filter(([, d]) => d && d.wind_speed_kmh != null);
+  if (per.length) s += '<br>' + per.map(([st, d]) => `${esc(st.name)} (${esc(st.location)}): ${d.wind_speed_kmh.toFixed(0)} km/h` +
+    (d.wind_dir_deg != null ? ` from ${card(d.wind_dir_deg)}` : '') + (st.id === w.main_station ? ' (main)' : '')).join('<br>');
   $('wstatus').innerHTML = s;
+  applyStations(w);
   if (dir != null) {
     $('windarrow').setAttribute('transform', `rotate(${dir})`);
     if (spd != null) {
@@ -617,6 +634,19 @@ function applyWeather(w) {
       windArrow.visible = true;
       windLabel.textContent = `Wind ${spd.toFixed(0)} km/h from ${card(dir)}`;
     }
+  }
+}
+
+function applyStations(w) {
+  // Small arrow at each node, pointing where its wind blows to; hidden without that node's data (e.g. mock history)
+  for (const a of stationArrows) {
+    const d = w && w.stations && w.stations[a.st.id];
+    a.g.visible = !!(d && d.wind_speed_kmh != null && d.wind_dir_deg != null);
+    if (!a.g.visible) continue;
+    a.g.userData.setLength(STATION_BASE_LEN + STATION_M_PER_KMH * d.wind_speed_kmh);
+    const to = THREE.MathUtils.degToRad((d.wind_dir_deg + 180) % 360);
+    a.g.quaternion.setFromUnitVectors(UP, new THREE.Vector3(Math.sin(to), 0, -Math.cos(to)));
+    a.el.textContent = `${a.st.name}: ${d.wind_speed_kmh.toFixed(0)} km/h`;
   }
 }
 
@@ -863,6 +893,9 @@ function placeLabels() {
   if (moonMesh.visible) place(moonLabel, moonMesh.position.x, moonMesh.position.y + MOON_R * 1.6, moonMesh.position.z); else moonLabel.style.display = 'none';
   if (moonArrow.visible) { const p = tipOf(moonArrow, 20); place(moonArrowLabel, p.x, p.y, p.z); } else moonArrowLabel.style.display = 'none';
   if (windArrow.visible) { const p = tipOf(windArrow, 18); place(windLabel, p.x, p.y + 4, p.z); } else windLabel.style.display = 'none';
+  for (const a of stationArrows) {
+    if (a.g.visible) { const p = tipOf(a.g, 6); place(a.el, p.x, p.y + 2, p.z); } else a.el.style.display = 'none';
+  }
   for (const a of alertObjs) { const p = tipOf(a.g, 16); place(a.el, p.x, p.y, p.z); }
   const az = Math.atan2(camera.position.x - controls.target.x, -(camera.position.z - controls.target.z));
   $('needle').style.transform = `rotate(${-THREE.MathUtils.radToDeg(az) + 180}deg) translateY(-14px)`;
@@ -886,7 +919,7 @@ function animate(t) {
   const styles = await getJSON('building_styles.json').catch(() => null);
   scene.add(addBuildings((await getJSON('buildings.json')).buildings, model.grid, terrain.material.map, styles));
   addScopes();
-  addWind();
+  addWind((await getJSON('weather_stations.json').catch(() => null))?.stations);
   addSky();
   applyTheme();
   $('showalerts').checked = !!cfg.alerts_default_on;
